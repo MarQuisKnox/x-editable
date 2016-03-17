@@ -316,12 +316,7 @@ Editableform is linked with one of input types, e.g. 'text', 'select' etc.
             if (send) { //send to server
                 this.showLoading();
 
-                //standard params
-                params = {
-                    name: this.options.name || '',
-                    value: submitValue,
-                    pk: pk 
-                };
+                params = this.buildParams(submitValue, pk);
 
                 //additional params
                 if(typeof this.options.params === 'function') {
@@ -344,6 +339,15 @@ Editableform is linked with one of input types, e.g. 'text', 'select' etc.
                 }
             }
         }, 
+
+        buildParams: function (value, pk) {
+          //standard params
+          return {
+            name: this.options.name || '',
+            value: value,
+            pk: pk
+          };
+        },
 
         validate: function (value) {
             if (value === undefined) {
@@ -792,20 +796,19 @@ Editableform is linked with one of input types, e.g. 'text', 'select' etc.
            $.each(sourceData, function(i, o) {
                if(o.children) {
                    result = result.concat(that.itemsByValue(value, o.children, valueProp));
-               } else {
-                   /*jslint eqeq: true*/
-                   if(isValArray) {
-                       if($.grep(value, function(v){  return v == (o && typeof o === 'object' ? valueProp(o) : o); }).length) {
-                           result.push(o); 
-                       }
-                   } else {
-                       var itemValue = (o && (typeof o === 'object')) ? valueProp(o) : o;
-                       if(value == itemValue) {
-                           result.push(o); 
-                       }
-                   }
-                   /*jslint eqeq: false*/
                }
+               /*jslint eqeq: true*/
+               if(isValArray) {
+                   if($.grep(value, function(v){  return v == (o && typeof o === 'object' ? valueProp(o) : o); }).length) {
+                       result.push(o);
+                   }
+               } else {
+                   var itemValue = (o && (typeof o === 'object')) ? valueProp(o) : o;
+                   if(value == itemValue) {
+                       result.push(o);
+                   }
+               }
+               /*jslint eqeq: false*/
            });
            
            return result;
@@ -941,7 +944,7 @@ Applied as jQuery method.
                 //close all on escape
                 $(document).on('keyup.editable', function (e) {
                     if (e.which === 27) {
-                        $('.editable-open').editableContainer('hide');
+                        $('.editable-open').editableContainer('hide', 'cancel');
                         //todo: return focus on element 
                     }
                 });
@@ -1132,7 +1135,7 @@ Applied as jQuery method.
         @param {string} reason Reason caused hiding. Can be <code>save|cancel|onblur|nochange|undefined (=manual)</code>
         **/         
         hide: function(reason) {  
-            if (!this.tip() || (!this.tip().is(':visible') && this.options.mode !== "inline") || !this.$element.hasClass('editable-open')) {
+            if(!this.tip() || !this.tip().is(':visible') || !this.$element.hasClass('editable-open')) {
                 return;
             }
             
@@ -1613,7 +1616,7 @@ Makes editable any HTML element on the page. Applied as jQuery method.
            this.options.autotext = 'never';
            //listen toggle events
            this.$element.on(this.options.toggle + '.editable', selector, $.proxy(function(e){
-               var $target = $(e.target);
+               var $target = $(e.target).closest(selector);
                if(!$target.data('editable')) {
                    //if delegated element initially empty, we need to clear it's text (that was manually set to `empty` by user)
                    //see https://github.com/vitalets/x-editable/issues/137 
@@ -1849,7 +1852,7 @@ Makes editable any HTML element on the page. Applied as jQuery method.
                 sent = sent || typeof this.options.url === 'function';
                 sent = sent || this.options.display === false; 
                 sent = sent || params.response !== undefined; 
-                sent = sent || (this.options.savenochange && this.input.value2str(this.value) !== this.input.value2str(params.newValue)); 
+                sent = sent || (this.input.value2str(this.value) !== this.input.value2str(params.newValue));
                 
                 if(sent) {
                     this.$element.removeClass(this.options.unsavedclass); 
@@ -1865,7 +1868,7 @@ Makes editable any HTML element on the page. Applied as jQuery method.
                     
                 $e.css('background-color', this.options.highlight);
                 setTimeout(function(){
-                    if(bgColor === 'transparent') {
+                    if((bgColor === 'transparent') || (bgColor === 'rgba(0, 0, 0, 0)')) {
                         bgColor = ''; 
                     }
                     $e.css('background-color', bgColor);
@@ -2924,6 +2927,7 @@ $(function(){
         render: function() {
            this.renderClear();
            this.setClass();
+           this.setAttr('maxlength');
            this.setAttr('placeholder');
         },
         
@@ -3024,7 +3028,16 @@ $(function(){
         @type boolean
         @default true        
         **/
-        clear: true
+        clear: true,
+                
+        /**
+        Maxlength atttribute of input. Specifies the maximum allowable length for the input.   
+        
+        @property maxlength
+        @type integer
+        @default null        
+        **/
+        maxlength: null
     });
 
     $.fn.editabletypes.text = Text;
@@ -3061,6 +3074,7 @@ $(function(){
     $.extend(Textarea.prototype, {
         render: function () {
             this.setClass();
+            this.setAttr('maxlength');
             this.setAttr('placeholder');
             this.setAttr('rows');                        
             
@@ -3136,7 +3150,16 @@ $(function(){
         @type integer
         @default 7
         **/        
-        rows: 7        
+        rows: 7,
+                        
+        /**
+        Maxlength atttribute of input. Specifies the maximum allowable length for the input.   
+        
+        @property maxlength
+        @type integer
+        @default null        
+        **/
+        maxlength: null        
     });
 
     $.fn.editabletypes.textarea = Textarea;
@@ -3158,7 +3181,7 @@ $(function(){
         source: [
               {value: 1, text: 'Active'},
               {value: 2, text: 'Blocked'},
-              {value: 3, text: 'Deleted'}
+              {value: 3, text: 'Deleted', inputclass: 'deleted'}
            ]
     });
 });
@@ -3176,13 +3199,15 @@ $(function(){
     $.extend(Select.prototype, {
         renderList: function() {
             this.$input.empty();
-            var escape = this.options.escape;
 
             var fillItems = function($el, data) {
                 var attr;
                 if($.isArray(data)) {
                     for(var i=0; i<data.length; i++) {
                         attr = {};
+                        if(data[i].inputclass) {
+                            attr['class'] = data[i].inputclass;
+                        }
                         if(data[i].children) {
                             attr.label = data[i].text;
                             $el.append(fillItems($('<optgroup>', attr), data[i].children)); 
@@ -3191,9 +3216,7 @@ $(function(){
                             if(data[i].disabled) {
                                 attr.disabled = true;
                             }
-                            var $option = $('<option>', attr);
-                            $option[escape ? 'text' : 'html'](data[i].text);
-                            $el.append($option);
+                            $el.append($('<option>').attr(attr).text(data[i].text)); 
                         }
                     }
                 }
@@ -4677,7 +4700,7 @@ Editableform based on Twitter Bootstrap 3
             var defaultClass = 'input-sm';
             
             //bs3 add `form-control` class to standard inputs
-            var stdtypes = 'text,select,textarea,password,email,url,tel,number,range,time,typeaheadjs'.split(','); 
+            var stdtypes = 'text,select,textarea,password,email,url,tel,number,range,time,typeaheadjs,combodate'.split(','); 
             if(~$.inArray(this.input.type, stdtypes)) {
                 this.input.$input.addClass('form-control');
                 if(emptyInputClass) {
